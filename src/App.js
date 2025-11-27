@@ -164,10 +164,9 @@ function App() {
       x = innerX + (innerWidth - drawWidth) / 2;
       y = innerY + (innerHeight - drawHeight) / 2;
       
-      // Update image position and size for edit mode
       if (!isManuallyTransformed) {
-        setImagePosition({ x, y });
-        setImageSize({ width: drawWidth, height: drawHeight });
+        setImagePosition(prev => (prev.x === x && prev.y === y ? prev : { x, y }));
+        setImageSize(prev => (prev.width === drawWidth && prev.height === drawHeight ? prev : { width: drawWidth, height: drawHeight }));
       }
     }
     
@@ -922,6 +921,13 @@ function App() {
                       onClick={() => {
                         setUploadedImage(null);
                         setOriginalImageData(null);
+                        setGifFramesData([]);
+                        setIsGif(false);
+                        setCurrentFrame(0);
+                        setIsEditMode(false);
+                        setIsManuallyTransformed(false);
+                        setImagePosition({ x: 0, y: 0 });
+                        setImageSize({ width: 0, height: 0 });
                       }}
                       className="text-gray-400 hover:text-gray-600"
                     >
