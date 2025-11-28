@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { GifReader } from 'omggif';
 import './App.css';
 
@@ -50,27 +50,36 @@ function App() {
   const [baseImageSize, setBaseImageSize] = useState({ width: 0, height: 0 });
   const [showCenterPoint, setShowCenterPoint] = useState(false);
   const [isGif, setIsGif] = useState(false);
-  const [gifFramesData, setGifFramesData] = useState([]);
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [gifFrameCount, setGifFrameCount] = useState(0);
   const [margin, setMargin] = useState(0);
   const isScalingFromSlider = useRef(false);
 
   const canvasRef = useRef(null);
   const hiddenCanvasRef = useRef(null);
   const fileInputRef = useRef(null);
+  const gifReaderRef = useRef(null);
+  const gifBytesRef = useRef(null);
+  const checkerTileRef = useRef(null);
+  const imageObjectUrlRef = useRef(null);
 
   const drawCheckerboard = (ctx, width, height) => {
-    const squareSize = 20;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, height);
-    ctx.fillStyle = '#e0e0e0';
-    for (let y = 0; y < height; y += squareSize) {
-      for (let x = 0; x < width; x += squareSize) {
-        if ((Math.floor(y / squareSize) + Math.floor(x / squareSize)) % 2 === 0) {
-          ctx.fillRect(x, y, squareSize, squareSize);
-        }
-      }
+    const tileSize = 20;
+    if (!checkerTileRef.current) {
+      const tile = document.createElement('canvas');
+      tile.width = tileSize * 2;
+      tile.height = tileSize * 2;
+      const tctx = tile.getContext('2d');
+      tctx.fillStyle = '#ffffff';
+      tctx.fillRect(0, 0, tile.width, tile.height);
+      tctx.fillStyle = '#e0e0e0';
+      tctx.fillRect(0, 0, tileSize, tileSize);
+      tctx.fillRect(tileSize, tileSize, tileSize, tileSize);
+      checkerTileRef.current = tile;
     }
+    const pattern = ctx.createPattern(checkerTileRef.current, 'repeat');
+    ctx.fillStyle = pattern;
+    ctx.fillRect(0, 0, width, height);
   };
 
   const drawImageOnCanvas = useCallback(() => {
@@ -78,21 +87,25 @@ function App() {
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    
-    canvas.width = selectedRatio.width;
-    canvas.height = selectedRatio.height;
-    
+
+    if (canvas.width !== selectedRatio.width) {
+      canvas.width = selectedRatio.width;
+    }
+    if (canvas.height !== selectedRatio.height) {
+      canvas.height = selectedRatio.height;
+    }
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     const outerWidth = canvas.width - margin * 2;
     const outerHeight = canvas.height - margin * 2;
 
     // Draw outer background
     if (isTransparentOutside) {
-        drawCheckerboard(ctx, canvas.width, canvas.height);
+      drawCheckerboard(ctx, canvas.width, canvas.height);
     } else {
-        ctx.fillStyle = outsideBackgroundColor;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = outsideBackgroundColor;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
 
     ctx.save();
@@ -117,16 +130,16 @@ function App() {
     ctx.clip();
 
     if (isTransparent) {
-        drawCheckerboard(ctx, canvas.width, canvas.height);
+      drawCheckerboard(ctx, canvas.width, canvas.height);
     } else {
-        ctx.fillStyle = insideBackgroundColor;
-        ctx.fillRect(innerX, innerY, innerWidth, innerHeight);
+      ctx.fillStyle = insideBackgroundColor;
+      ctx.fillRect(innerX, innerY, innerWidth, innerHeight);
     }
-    
+
     // Calculate image dimensions based on fit mode and scale
     const scaleMultiplier = imageScale / 100;
     let drawWidth, drawHeight, x, y;
-    
+
     if (isManuallyTransformed && imageSize.width > 0) {
       drawWidth = imageSize.width;
       drawHeight = imageSize.height;
@@ -136,7 +149,7 @@ function App() {
       if (fitMode === 'contain') {
         const imageRatio = originalImageData.width / originalImageData.height;
         const canvasRatio = innerWidth / innerHeight;
-        
+
         if (imageRatio > canvasRatio) {
           drawWidth = innerWidth * scaleMultiplier;
           drawHeight = drawWidth / imageRatio;
@@ -147,7 +160,7 @@ function App() {
       } else if (fitMode === 'cover') {
         const imageRatio = originalImageData.width / originalImageData.height;
         const canvasRatio = innerWidth / innerHeight;
-        
+
         if (imageRatio > canvasRatio) {
           drawHeight = innerHeight * scaleMultiplier;
           drawWidth = drawHeight * imageRatio;
@@ -159,24 +172,24 @@ function App() {
         drawWidth = innerWidth * scaleMultiplier;
         drawHeight = innerHeight * scaleMultiplier;
       }
-      
+
       // Center the image in the inner area
       x = innerX + (innerWidth - drawWidth) / 2;
       y = innerY + (innerHeight - drawHeight) / 2;
-      
+
       if (!isManuallyTransformed) {
         setImagePosition(prev => (prev.x === x && prev.y === y ? prev : { x, y }));
         setImageSize(prev => (prev.width === drawWidth && prev.height === drawHeight ? prev : { width: drawWidth, height: drawHeight }));
       }
     }
-    
+
     // Draw image (will be clipped by the inner rounded rectangle)
     ctx.drawImage(uploadedImage, x, y, drawWidth, drawHeight);
-    
+
     // Restore from inner clip, then outer clip
     ctx.restore();
     ctx.restore();
-    
+
     // Draw resize handles in edit mode
     if (isEditMode) {
       drawResizeHandles(ctx, x, y, drawWidth, drawHeight);
@@ -184,37 +197,37 @@ function App() {
         drawCenterPoint(ctx);
       }
     }
-    
-  }, [uploadedImage, selectedRatio, insideBackgroundColor, borderWidth, borderColor, 
-      borderRadius, fitMode, imageScale, originalImageData, isEditMode, imagePosition, 
-      imageSize, centerPoint, showCenterPoint, isTransparent, isManuallyTransformed, margin, isTransparentOutside, outsideBackgroundColor]);
+
+  }, [uploadedImage, selectedRatio, insideBackgroundColor, borderWidth, borderColor,
+    borderRadius, fitMode, imageScale, originalImageData, isEditMode, imagePosition,
+    imageSize, centerPoint, showCenterPoint, isTransparent, isManuallyTransformed, margin, isTransparentOutside, outsideBackgroundColor]);
 
   const drawResizeHandles = (ctx, x, y, width, height) => {
     const handleSize = 8;
     const handleColor = '#3b82f6';
     const handleBorderColor = '#ffffff';
-    
+
     const handles = [
       // Corners
-      { x: x - handleSize/2, y: y - handleSize/2, cursor: 'nw-resize', type: 'corner', direction: 'nw' },
-      { x: x + width - handleSize/2, y: y - handleSize/2, cursor: 'ne-resize', type: 'corner', direction: 'ne' },
-      { x: x - handleSize/2, y: y + height - handleSize/2, cursor: 'sw-resize', type: 'corner', direction: 'sw' },
-      { x: x + width - handleSize/2, y: y + height - handleSize/2, cursor: 'se-resize', type: 'corner', direction: 'se' },
+      { x: x - handleSize / 2, y: y - handleSize / 2, cursor: 'nw-resize', type: 'corner', direction: 'nw' },
+      { x: x + width - handleSize / 2, y: y - handleSize / 2, cursor: 'ne-resize', type: 'corner', direction: 'ne' },
+      { x: x - handleSize / 2, y: y + height - handleSize / 2, cursor: 'sw-resize', type: 'corner', direction: 'sw' },
+      { x: x + width - handleSize / 2, y: y + height - handleSize / 2, cursor: 'se-resize', type: 'corner', direction: 'se' },
       // Sides
-      { x: x + width/2 - handleSize/2, y: y - handleSize/2, cursor: 'n-resize', type: 'side', direction: 'n' },
-      { x: x + width - handleSize/2, y: y + height/2 - handleSize/2, cursor: 'e-resize', type: 'side', direction: 'e' },
-      { x: x + width/2 - handleSize/2, y: y + height - handleSize/2, cursor: 's-resize', type: 'side', direction: 's' },
-      { x: x - handleSize/2, y: y + height/2 - handleSize/2, cursor: 'w-resize', type: 'side', direction: 'w' },
+      { x: x + width / 2 - handleSize / 2, y: y - handleSize / 2, cursor: 'n-resize', type: 'side', direction: 'n' },
+      { x: x + width - handleSize / 2, y: y + height / 2 - handleSize / 2, cursor: 'e-resize', type: 'side', direction: 'e' },
+      { x: x + width / 2 - handleSize / 2, y: y + height - handleSize / 2, cursor: 's-resize', type: 'side', direction: 's' },
+      { x: x - handleSize / 2, y: y + height / 2 - handleSize / 2, cursor: 'w-resize', type: 'side', direction: 'w' },
     ];
-    
+
     handles.forEach(handle => {
       ctx.fillStyle = handleBorderColor;
       ctx.fillRect(handle.x - 1, handle.y - 1, handleSize + 2, handleSize + 2);
-      
+
       ctx.fillStyle = handleColor;
       ctx.fillRect(handle.x, handle.y, handleSize, handleSize);
     });
-    
+
     // Draw selection border
     ctx.strokeStyle = handleColor;
     ctx.lineWidth = 2;
@@ -245,7 +258,7 @@ function App() {
     ctx.beginPath();
     ctx.arc(centerX, centerY, handleSize / 2, 0, 2 * Math.PI);
     ctx.fill();
-    
+
     // Draw crosshairs
     ctx.strokeStyle = handleColor;
     ctx.lineWidth = 1;
@@ -261,88 +274,93 @@ function App() {
     drawImageOnCanvas();
   }, [drawImageOnCanvas]);
 
+  useEffect(() => {
+    return () => {
+      if (imageObjectUrlRef.current) {
+        URL.revokeObjectURL(imageObjectUrlRef.current);
+        imageObjectUrlRef.current = null;
+      }
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      gifReaderRef.current = null;
+      gifBytesRef.current = null;
+    };
+  }, []);
+
   const handleFrameChange = (frameIndex) => {
-    if (!gifFramesData.length) return;
+    if (!gifReaderRef.current) return;
     const newFrameIndex = Number(frameIndex);
     setCurrentFrame(newFrameIndex);
 
-    const frame = gifFramesData[newFrameIndex];
-    const img = new Image();
+    const reader = gifReaderRef.current;
     const canvas = document.createElement('canvas');
-    canvas.width = originalImageData.width;
-    canvas.height = originalImageData.height;
+    canvas.width = reader.width;
+    canvas.height = reader.height;
     const ctx = canvas.getContext('2d');
-    const imageData = ctx.createImageData(originalImageData.width, originalImageData.height);
-    imageData.data.set(frame);
+    const imageData = ctx.createImageData(reader.width, reader.height);
+    const rgba = new Uint8ClampedArray(reader.width * reader.height * 4);
+    reader.decodeAndBlitFrameRGBA(newFrameIndex, rgba);
+    imageData.data.set(rgba);
     ctx.putImageData(imageData, 0, 0);
-    img.src = canvas.toDataURL();
+    const img = new Image();
     img.onload = () => {
       setUploadedImage(img);
-    }
+    };
+    img.src = canvas.toDataURL();
   }
 
-  const handleImageUpload = (file) => {
+  const handleImageUpload = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target.result;
-      const img = new Image();
+    if (imageObjectUrlRef.current) {
+      URL.revokeObjectURL(imageObjectUrlRef.current);
+      imageObjectUrlRef.current = null;
+    }
 
-      img.onload = () => {
-        setOriginalImageData({
-          width: img.width,
-          height: img.height,
-          dataUrl: dataUrl,
-        });
-        setIsManuallyTransformed(false);
+    const objectUrl = URL.createObjectURL(file);
+    imageObjectUrlRef.current = objectUrl;
 
-        if (file.type === 'image/gif') {
-          setIsGif(true);
-          
-          const base64 = dataUrl.split(',')[1];
-          const binaryStr = atob(base64);
-          const len = binaryStr.length;
-          const bytes = new Uint8Array(len);
-          for (let i = 0; i < len; i++) {
-            bytes[i] = binaryStr.charCodeAt(i);
-          }
+    const img = new Image();
+    img.onload = async () => {
+      setOriginalImageData({
+        width: img.width,
+        height: img.height,
+        previewUrl: objectUrl,
+      });
+      setIsManuallyTransformed(false);
 
-          const gifReader = new GifReader(bytes);
-          const frames = [];
-          for (let i = 0; i < gifReader.numFrames(); i++) {
-            const image_data = new Uint8ClampedArray(gifReader.width * gifReader.height * 4);
-            gifReader.decodeAndBlitFrameRGBA(i, image_data);
-            frames.push(image_data);
-          }
-          setGifFramesData(frames);
-          setCurrentFrame(0);
+      if (file.type === 'image/gif') {
+        setIsGif(true);
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        const gifReader = new GifReader(bytes);
+        gifReaderRef.current = gifReader;
+        gifBytesRef.current = bytes;
+        setGifFrameCount(gifReader.numFrames());
+        setCurrentFrame(0);
 
-          // Create first frame image for canvas
-          const firstFrame = frames[0];
-          const canvas = document.createElement('canvas');
-          canvas.width = gifReader.width;
-          canvas.height = gifReader.height;
-          const ctx = canvas.getContext('2d');
-          const imageData = ctx.createImageData(gifReader.width, gifReader.height);
-          imageData.data.set(firstFrame);
-          ctx.putImageData(imageData, 0, 0);
-
-          const firstFrameImg = new Image();
-          firstFrameImg.onload = () => {
-            setUploadedImage(firstFrameImg);
-          };
-          firstFrameImg.src = canvas.toDataURL();
-
-        } else {
-          setIsGif(false);
-          setGifFramesData([]);
-          setUploadedImage(img);
-        }
+        const rgba = new Uint8ClampedArray(gifReader.width * gifReader.height * 4);
+        gifReader.decodeAndBlitFrameRGBA(0, rgba);
+        const canvas = document.createElement('canvas');
+        canvas.width = gifReader.width;
+        canvas.height = gifReader.height;
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(gifReader.width, gifReader.height);
+        imageData.data.set(rgba);
+        ctx.putImageData(imageData, 0, 0);
+        const firstFrameImg = new Image();
+        firstFrameImg.onload = () => {
+          setUploadedImage(firstFrameImg);
+        };
+        firstFrameImg.src = canvas.toDataURL();
+      } else {
+        setIsGif(false);
+        setUploadedImage(img);
       }
-      img.src = dataUrl;
     };
-    reader.readAsDataURL(file);
+    img.src = objectUrl;
   };
 
   const handleDrop = (e) => {
@@ -375,7 +393,7 @@ function App() {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    
+
     return {
       x: (e.clientX - rect.left) * scaleX,
       y: (e.clientY - rect.top) * scaleY
@@ -385,39 +403,39 @@ function App() {
   const getResizeHandle = (mousePos, imageX, imageY, imageWidth, imageHeight) => {
     const handleSize = 8;
     const tolerance = 4;
-    
+
     const handles = [
-      { x: imageX - handleSize/2, y: imageY - handleSize/2, direction: 'nw', cursor: 'nw-resize' },
-      { x: imageX + imageWidth - handleSize/2, y: imageY - handleSize/2, direction: 'ne', cursor: 'ne-resize' },
-      { x: imageX - handleSize/2, y: imageY + imageHeight - handleSize/2, direction: 'sw', cursor: 'sw-resize' },
-      { x: imageX + imageWidth - handleSize/2, y: imageY + imageHeight - handleSize/2, direction: 'se', cursor: 'se-resize' },
-      { x: imageX + imageWidth/2 - handleSize/2, y: imageY - handleSize/2, direction: 'n', cursor: 'n-resize' },
-      { x: imageX + imageWidth - handleSize/2, y: imageY + imageHeight/2 - handleSize/2, direction: 'e', cursor: 'e-resize' },
-      { x: imageX + imageWidth/2 - handleSize/2, y: imageY + imageHeight - handleSize/2, direction: 's', cursor: 's-resize' },
-      { x: imageX - handleSize/2, y: imageY + imageHeight/2 - handleSize/2, direction: 'w', cursor: 'w-resize' },
+      { x: imageX - handleSize / 2, y: imageY - handleSize / 2, direction: 'nw', cursor: 'nw-resize' },
+      { x: imageX + imageWidth - handleSize / 2, y: imageY - handleSize / 2, direction: 'ne', cursor: 'ne-resize' },
+      { x: imageX - handleSize / 2, y: imageY + imageHeight - handleSize / 2, direction: 'sw', cursor: 'sw-resize' },
+      { x: imageX + imageWidth - handleSize / 2, y: imageY + imageHeight - handleSize / 2, direction: 'se', cursor: 'se-resize' },
+      { x: imageX + imageWidth / 2 - handleSize / 2, y: imageY - handleSize / 2, direction: 'n', cursor: 'n-resize' },
+      { x: imageX + imageWidth - handleSize / 2, y: imageY + imageHeight / 2 - handleSize / 2, direction: 'e', cursor: 'e-resize' },
+      { x: imageX + imageWidth / 2 - handleSize / 2, y: imageY + imageHeight - handleSize / 2, direction: 's', cursor: 's-resize' },
+      { x: imageX - handleSize / 2, y: imageY + imageHeight / 2 - handleSize / 2, direction: 'w', cursor: 'w-resize' },
     ];
-    
+
     for (let handle of handles) {
-      if (Math.abs(mousePos.x - (handle.x + handleSize/2)) <= handleSize/2 + tolerance &&
-          Math.abs(mousePos.y - (handle.y + handleSize/2)) <= handleSize/2 + tolerance) {
+      if (Math.abs(mousePos.x - (handle.x + handleSize / 2)) <= handleSize / 2 + tolerance &&
+        Math.abs(mousePos.y - (handle.y + handleSize / 2)) <= handleSize / 2 + tolerance) {
         return handle;
       }
     }
-    
+
     return null;
   };
 
   const isPointInImage = (mousePos, imageX, imageY, imageWidth, imageHeight) => {
     return mousePos.x >= imageX && mousePos.x <= imageX + imageWidth &&
-           mousePos.y >= imageY && mousePos.y <= imageY + imageHeight;
+      mousePos.y >= imageY && mousePos.y <= imageY + imageHeight;
   };
 
   const handleCanvasDoubleClick = (e) => {
     if (!uploadedImage) return;
-    
+
     const canvas = canvasRef.current;
     const mousePos = getMousePos(canvas, e);
-    
+
     if (isPointInImage(mousePos, imagePosition.x, imagePosition.y, imageSize.width, imageSize.height)) {
       if (!isEditMode && !isManuallyTransformed) {
         // Entering edit mode for the first time after a reset
@@ -432,10 +450,10 @@ function App() {
 
   const handleCanvasMouseDown = (e) => {
     if (!isEditMode || !uploadedImage) return;
-    
+
     const canvas = canvasRef.current;
     const mousePos = getMousePos(canvas, e);
-    
+
     // Check for center point drag
     if (showCenterPoint) {
       const centerX = imagePosition.x + centerPoint.x;
@@ -455,7 +473,7 @@ function App() {
     }
 
     const handle = getResizeHandle(mousePos, imagePosition.x, imagePosition.y, imageSize.width, imageSize.height);
-    
+
     if (handle) {
       setDragState({
         isDragging: true,
@@ -478,151 +496,151 @@ function App() {
     }
   };
 
+  const lastMousePosRef = useRef(null);
+  const rafIdRef = useRef(null);
   const handleCanvasMouseMove = (e) => {
     if (!isEditMode || !uploadedImage) return;
-    
     const canvas = canvasRef.current;
     const mousePos = getMousePos(canvas, e);
-    
-    if (dragState.isDragging) {
-      setIsManuallyTransformed(true);
-      const deltaX = mousePos.x - dragState.startPos.x;
-      const deltaY = mousePos.y - dragState.startPos.y;
-      
-      if (dragState.handle === 'move') {
-        setImagePosition({
-          x: dragState.startPosition.x + deltaX,
-          y: dragState.startPosition.y + deltaY
-        });
-      } else if (dragState.handle === 'center') {
-        setCenterPoint({
-          x: dragState.startCenterPoint.x + deltaX,
-          y: dragState.startCenterPoint.y + deltaY,
-        });
+    lastMousePosRef.current = mousePos;
+    if (rafIdRef.current) return;
+    rafIdRef.current = requestAnimationFrame(() => {
+      rafIdRef.current = null;
+      const mp = lastMousePosRef.current;
+      if (!mp) return;
+      if (dragState.isDragging) {
+        setIsManuallyTransformed(true);
+        const deltaX = mp.x - dragState.startPos.x;
+        const deltaY = mp.y - dragState.startPos.y;
+        if (dragState.handle === 'move') {
+          setImagePosition({
+            x: dragState.startPosition.x + deltaX,
+            y: dragState.startPosition.y + deltaY
+          });
+        } else if (dragState.handle === 'center') {
+          setCenterPoint({
+            x: dragState.startCenterPoint.x + deltaX,
+            y: dragState.startCenterPoint.y + deltaY,
+          });
+        } else {
+          let newWidth = dragState.startSize.width;
+          let newHeight = dragState.startSize.height;
+          let newX = dragState.startPosition.x;
+          let newY = dragState.startPosition.y;
+          const aspectRatio = originalImageData.width / originalImageData.height;
+          switch (dragState.handle) {
+            case 'se':
+              newWidth = Math.max(20, dragState.startSize.width + deltaX);
+              if (maintainRatio) {
+                newHeight = newWidth / aspectRatio;
+              } else {
+                newHeight = Math.max(20, dragState.startSize.height + deltaY);
+              }
+              break;
+            case 'sw':
+              newWidth = Math.max(20, dragState.startSize.width - deltaX);
+              newX = dragState.startPosition.x + deltaX;
+              if (maintainRatio) {
+                newHeight = newWidth / aspectRatio;
+              } else {
+                newHeight = Math.max(20, dragState.startSize.height + deltaY);
+              }
+              break;
+            case 'ne':
+              newWidth = Math.max(20, dragState.startSize.width + deltaX);
+              newY = dragState.startPosition.y + deltaY;
+              if (maintainRatio) {
+                newHeight = newWidth / aspectRatio;
+                newY = dragState.startPosition.y + (dragState.startSize.height - newHeight);
+              } else {
+                newHeight = Math.max(20, dragState.startSize.height - deltaY);
+              }
+              break;
+            case 'nw':
+              newWidth = Math.max(20, dragState.startSize.width - deltaX);
+              newX = dragState.startPosition.x + deltaX;
+              newY = dragState.startPosition.y + deltaY;
+              if (maintainRatio) {
+                newHeight = newWidth / aspectRatio;
+                newY = dragState.startPosition.y + (dragState.startSize.height - newHeight);
+              } else {
+                newHeight = Math.max(20, dragState.startSize.height - deltaY);
+              }
+              break;
+            case 'e':
+              newWidth = Math.max(20, dragState.startSize.width + deltaX);
+              if (maintainRatio) {
+                newHeight = newWidth / aspectRatio;
+                newY = dragState.startPosition.y + (dragState.startSize.height - newHeight) / 2;
+              }
+              break;
+            case 'w':
+              newWidth = Math.max(20, dragState.startSize.width - deltaX);
+              newX = dragState.startPosition.x + deltaX;
+              if (maintainRatio) {
+                newHeight = newWidth / aspectRatio;
+                newY = dragState.startPosition.y + (dragState.startSize.height - newHeight) / 2;
+              }
+              break;
+            case 'n':
+              if (maintainRatio) {
+                newHeight = Math.max(20, dragState.startSize.height - deltaY);
+                newWidth = newHeight * aspectRatio;
+                newX = dragState.startPosition.x + (dragState.startSize.width - newWidth) / 2;
+              } else {
+                newHeight = Math.max(20, dragState.startSize.height - deltaY);
+              }
+              newY = dragState.startPosition.y + deltaY;
+              break;
+            case 's':
+              if (maintainRatio) {
+                newHeight = Math.max(20, dragState.startSize.height + deltaY);
+                newWidth = newHeight * aspectRatio;
+                newX = dragState.startPosition.x + (dragState.startSize.width - newWidth) / 2;
+              } else {
+                newHeight = Math.max(20, dragState.startSize.height + deltaY);
+              }
+              break;
+          }
+          const originX = dragState.startPosition.x + dragState.startCenterPoint.x;
+          const originY = dragState.startPosition.y + dragState.startCenterPoint.y;
+          newX = originX - (dragState.startCenterPoint.x) * (newWidth / dragState.startSize.width);
+          newY = originY - (dragState.startCenterPoint.y) * (newHeight / dragState.startSize.height);
+          const newCenterPoint = {
+            x: dragState.startCenterPoint.x * (newWidth / dragState.startSize.width),
+            y: dragState.startCenterPoint.y * (newHeight / dragState.startSize.height),
+          };
+          setImageSize({ width: newWidth, height: newHeight });
+          setImagePosition({ x: newX, y: newY });
+          setCenterPoint(newCenterPoint);
+        }
       } else {
-        // Handle resize
-        let newWidth = dragState.startSize.width;
-        let newHeight = dragState.startSize.height;
-        let newX = dragState.startPosition.x;
-        let newY = dragState.startPosition.y;
-        
-        const aspectRatio = originalImageData.width / originalImageData.height;
-        
-        switch (dragState.handle) {
-          case 'se':
-            newWidth = Math.max(20, dragState.startSize.width + deltaX);
-            if (maintainRatio) {
-              newHeight = newWidth / aspectRatio;
-            } else {
-              newHeight = Math.max(20, dragState.startSize.height + deltaY);
-            }
-            break;
-          case 'sw':
-            newWidth = Math.max(20, dragState.startSize.width - deltaX);
-            newX = dragState.startPosition.x + deltaX;
-            if (maintainRatio) {
-              newHeight = newWidth / aspectRatio;
-            } else {
-              newHeight = Math.max(20, dragState.startSize.height + deltaY);
-            }
-            break;
-          case 'ne':
-            newWidth = Math.max(20, dragState.startSize.width + deltaX);
-            newY = dragState.startPosition.y + deltaY;
-            if (maintainRatio) {
-              newHeight = newWidth / aspectRatio;
-              newY = dragState.startPosition.y + (dragState.startSize.height - newHeight);
-            } else {
-              newHeight = Math.max(20, dragState.startSize.height - deltaY);
-            }
-            break;
-          case 'nw':
-            newWidth = Math.max(20, dragState.startSize.width - deltaX);
-            newX = dragState.startPosition.x + deltaX;
-            newY = dragState.startPosition.y + deltaY;
-            if (maintainRatio) {
-              newHeight = newWidth / aspectRatio;
-              newY = dragState.startPosition.y + (dragState.startSize.height - newHeight);
-            } else {
-              newHeight = Math.max(20, dragState.startSize.height - deltaY);
-            }
-            break;
-          case 'e':
-            newWidth = Math.max(20, dragState.startSize.width + deltaX);
-            if (maintainRatio) {
-              newHeight = newWidth / aspectRatio;
-              newY = dragState.startPosition.y + (dragState.startSize.height - newHeight) / 2;
-            }
-            break;
-          case 'w':
-            newWidth = Math.max(20, dragState.startSize.width - deltaX);
-            newX = dragState.startPosition.x + deltaX;
-            if (maintainRatio) {
-              newHeight = newWidth / aspectRatio;
-              newY = dragState.startPosition.y + (dragState.startSize.height - newHeight) / 2;
-            }
-            break;
-          case 'n':
-            if (maintainRatio) {
-              newHeight = Math.max(20, dragState.startSize.height - deltaY);
-              newWidth = newHeight * aspectRatio;
-              newX = dragState.startPosition.x + (dragState.startSize.width - newWidth) / 2;
-            } else {
-              newHeight = Math.max(20, dragState.startSize.height - deltaY);
-            }
-            newY = dragState.startPosition.y + deltaY;
-            break;
-          case 's':
-            if (maintainRatio) {
-              newHeight = Math.max(20, dragState.startSize.height + deltaY);
-              newWidth = newHeight * aspectRatio;
-              newX = dragState.startPosition.x + (dragState.startSize.width - newWidth) / 2;
-            } else {
-              newHeight = Math.max(20, dragState.startSize.height + deltaY);
-            }
-            break;
-        }
-        
-        // Scale from center point
-        const originX = dragState.startPosition.x + dragState.startCenterPoint.x;
-        const originY = dragState.startPosition.y + dragState.startCenterPoint.y;
-        
-        newX = originX - (dragState.startCenterPoint.x) * (newWidth / dragState.startSize.width);
-        newY = originY - (dragState.startCenterPoint.y) * (newHeight / dragState.startSize.height);
-
-        // Update center point
-        const newCenterPoint = {
-          x: dragState.startCenterPoint.x * (newWidth / dragState.startSize.width),
-          y: dragState.startCenterPoint.y * (newHeight / dragState.startSize.height),
-        }
-        
-        setImageSize({ width: newWidth, height: newHeight });
-        setImagePosition({ x: newX, y: newY });
-        setCenterPoint(newCenterPoint);
-      }
-    } else {
-      // Update cursor based on hover
-      const handle = getResizeHandle(mousePos, imagePosition.x, imagePosition.y, imageSize.width, imageSize.height);
-      if (handle) {
-        canvas.style.cursor = handle.cursor;
-      } else if (showCenterPoint) {
-        const centerX = imagePosition.x + centerPoint.x;
-        const centerY = imagePosition.y + centerPoint.y;
-        const dist = Math.sqrt(Math.pow(mousePos.x - centerX, 2) + Math.pow(mousePos.y - centerY, 2));
-        if (dist < 10) {
+        const handle = getResizeHandle(mp, imagePosition.x, imagePosition.y, imageSize.width, imageSize.height);
+        if (handle) {
+          canvas.style.cursor = handle.cursor;
+        } else if (showCenterPoint) {
+          const centerX = imagePosition.x + centerPoint.x;
+          const centerY = imagePosition.y + centerPoint.y;
+          const dist = Math.sqrt(Math.pow(mp.x - centerX, 2) + Math.pow(mp.y - centerY, 2));
+          if (dist < 10) {
+            canvas.style.cursor = 'move';
+          } else {
+            canvas.style.cursor = isPointInImage(mp, imagePosition.x, imagePosition.y, imageSize.width, imageSize.height) ? 'move' : 'default';
+          }
+        } else if (isPointInImage(mp, imagePosition.x, imagePosition.y, imageSize.width, imageSize.height)) {
           canvas.style.cursor = 'move';
         } else {
-          canvas.style.cursor = isPointInImage(mousePos, imagePosition.x, imagePosition.y, imageSize.width, imageSize.height) ? 'move' : 'default';
+          canvas.style.cursor = 'default';
         }
-      } else if (isPointInImage(mousePos, imagePosition.x, imagePosition.y, imageSize.width, imageSize.height)) {
-        canvas.style.cursor = 'move';
-      } else {
-        canvas.style.cursor = 'default';
       }
-    }
+    });
   };
 
   const handleCanvasMouseUp = () => {
+    if (rafIdRef.current) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
     if (dragState.isDragging) {
       setDragState({ isDragging: false, handle: null, startPos: null, startSize: null, startPosition: null });
       if (canvasRef.current) {
@@ -690,14 +708,14 @@ function App() {
   const swapRatio = () => {
     const [w, h] = selectedRatio.ratio.split(':').map(Number);
     const isAlreadySwapped = selectedRatio.name.includes('(Swapped)');
-    
+
     const swappedRatio = {
       ...selectedRatio,
       ratio: `${h}:${w}`,
       width: selectedRatio.height,
       height: selectedRatio.width,
-      name: isAlreadySwapped 
-        ? selectedRatio.name.replace(' (Swapped)', '') 
+      name: isAlreadySwapped
+        ? selectedRatio.name.replace(' (Swapped)', '')
         : selectedRatio.name + ' (Swapped)'
     };
     setSelectedRatio(swappedRatio);
@@ -707,22 +725,22 @@ function App() {
 
   const exportImage = async (format = 'png') => {
     if (!canvasRef.current || !uploadedImage) return;
-    
+
     setIsExporting(true);
-    
+
     const exportCanvas = document.createElement('canvas');
     const exportCtx = exportCanvas.getContext('2d');
 
     exportCanvas.width = selectedRatio.width;
     exportCanvas.height = selectedRatio.height;
-    
+
     const outerWidth = exportCanvas.width - margin * 2;
     const outerHeight = exportCanvas.height - margin * 2;
 
     // Draw outer background if not transparent
     if (!isTransparentOutside) {
-        exportCtx.fillStyle = outsideBackgroundColor;
-        exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+      exportCtx.fillStyle = outsideBackgroundColor;
+      exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
     }
 
     // Save context and clip to the outer rounded rectangle
@@ -751,19 +769,19 @@ function App() {
     exportCtx.clip();
 
     if (isTransparent) {
-        exportCtx.clearRect(innerX, innerY, innerWidth, innerHeight);
+      exportCtx.clearRect(innerX, innerY, innerWidth, innerHeight);
     } else {
-        exportCtx.fillStyle = insideBackgroundColor;
-        exportCtx.fillRect(innerX, innerY, innerWidth, innerHeight);
+      exportCtx.fillStyle = insideBackgroundColor;
+      exportCtx.fillRect(innerX, innerY, innerWidth, innerHeight);
     }
 
     // Use the same positioning as the main canvas
     const { width: drawWidth, height: drawHeight } = imageSize;
     const { x, y } = imagePosition;
-        
+
     // Draw image (will be clipped)
     exportCtx.drawImage(uploadedImage, x, y, drawWidth, drawHeight);
-    
+
     // Restore from inner clip, then outer clip
     exportCtx.restore();
     exportCtx.restore();
@@ -772,15 +790,19 @@ function App() {
     setTimeout(() => {
       const link = document.createElement('a');
       link.download = `image-${selectedRatio.ratio.replace(':', 'x')}.${format}`;
-      
-      if (format === 'webp') {
-        link.href = exportCanvas.toDataURL('image/webp', 0.9);
-      } else {
-        link.href = exportCanvas.toDataURL('image/png');
-      }
-      
-      link.click();
-      setIsExporting(false);
+      const mime = format === 'webp' ? 'image/webp' : 'image/png';
+      exportCanvas.toBlob((blob) => {
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          link.href = url;
+          link.click();
+          URL.revokeObjectURL(url);
+        } else {
+          link.href = exportCanvas.toDataURL(mime, format === 'webp' ? 0.9 : undefined);
+          link.click();
+        }
+        setIsExporting(false);
+      }, mime, format === 'webp' ? 0.9 : undefined);
     }, 300);
   };
 
@@ -788,7 +810,7 @@ function App() {
 
   useEffect(() => {
     if (!isEditMode || !uploadedImage || !isScalingFromSlider.current) return;
-    
+
     const scaleFactor = imageScale / 100;
 
     const baseWidth = imageSize.width / (imageScale / 100);
@@ -798,10 +820,10 @@ function App() {
     const newHeight = baseImageSize.height * scaleFactor;
 
     if (newWidth <= 0 || newHeight <= 0) return;
-    
+
     const originX = imagePosition.x + centerPoint.x;
     const originY = imagePosition.y + centerPoint.y;
-    
+
     const newX = originX - centerPoint.x * (newWidth / imageSize.width);
     const newY = originY - centerPoint.y * (newHeight / imageSize.height);
 
@@ -827,9 +849,9 @@ function App() {
     // Set initial base size when entering edit mode or when image changes
     if (uploadedImage && baseImageSize.width === 0) {
       const scaleFactor = imageScale / 100;
-      setBaseImageSize({ 
-        width: imageSize.width / scaleFactor, 
-        height: imageSize.height / scaleFactor 
+      setBaseImageSize({
+        width: imageSize.width / scaleFactor,
+        height: imageSize.height / scaleFactor
       });
     }
 
@@ -879,14 +901,13 @@ function App() {
             {/* Upload Section */}
             <div className="p-6 border-b border-gray-200">
               <h2 className="mb-4 text-sm font-semibold text-gray-900">UPLOAD IMAGE</h2>
-              
+
               {!uploadedImage ? (
                 <div
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    isDragging 
-                      ? 'bg-blue-50 border-blue-500' 
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${isDragging
+                      ? 'bg-blue-50 border-blue-500'
                       : 'border-gray-300 hover:border-gray-400'
-                  }`}
+                    }`}
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
@@ -919,11 +940,17 @@ function App() {
                     </div>
                     <button
                       onClick={() => {
+                        if (imageObjectUrlRef.current) {
+                          URL.revokeObjectURL(imageObjectUrlRef.current);
+                          imageObjectUrlRef.current = null;
+                        }
                         setUploadedImage(null);
                         setOriginalImageData(null);
-                        setGifFramesData([]);
                         setIsGif(false);
+                        setGifFrameCount(0);
                         setCurrentFrame(0);
+                        gifReaderRef.current = null;
+                        gifBytesRef.current = null;
                         setIsEditMode(false);
                         setIsManuallyTransformed(false);
                         setImagePosition({ x: 0, y: 0 });
@@ -937,19 +964,19 @@ function App() {
                     </button>
                   </div>
                   <img
-                    src={originalImageData?.dataUrl}
+                    src={originalImageData?.previewUrl}
                     alt="Uploaded"
                     className="object-cover w-full h-32 bg-gray-100 rounded-lg"
                   />
-                  {isGif && gifFramesData.length > 0 && (
+                  {isGif && gifFrameCount > 0 && (
                     <div className="pt-2">
                       <label className="block mb-2 text-xs font-medium text-gray-700">
-                        FRAME ({currentFrame + 1} / {gifFramesData.length})
+                        FRAME ({currentFrame + 1} / {gifFrameCount})
                       </label>
                       <input
                         type="range"
                         min="0"
-                        max={gifFramesData.length - 1}
+                        max={gifFrameCount - 1}
                         value={currentFrame}
                         onChange={(e) => handleFrameChange(e.target.value)}
                         className="w-full slider"
@@ -958,7 +985,7 @@ function App() {
                   )}
                 </div>
               )}
-              
+
               <input
                 ref={fileInputRef}
                 type="file"
@@ -981,7 +1008,7 @@ function App() {
                       ↔ Swap
                     </button>
                   </div>
-                  
+
                   <div className="overflow-y-auto pr-2 space-y-4 max-h-96">
                     {categories.map((category) => (
                       <div key={category}>
@@ -996,11 +1023,10 @@ function App() {
                                 setSelectedRatio(preset);
                                 setIsManuallyTransformed(false);
                               }}
-                              className={`w-full text-left p-3 rounded-md text-sm transition-colors ${
-                                selectedRatio.name === preset.name
+                              className={`w-full text-left p-3 rounded-md text-sm transition-colors ${selectedRatio.name === preset.name
                                   ? 'bg-gray-900 text-white'
                                   : 'hover:bg-gray-50'
-                              }`}
+                                }`}
                             >
                               <div className="flex justify-between items-center">
                                 <span className="font-medium">{preset.name}</span>
@@ -1040,8 +1066,8 @@ function App() {
                           className={`p-1 rounded ${showCenterPoint ? 'text-blue-600 bg-blue-100' : 'text-gray-400 hover:bg-gray-100'}`}
                         >
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 1.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0"/>
-                            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/>
+                            <path d="M8 1.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0" />
+                            <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4" />
                           </svg>
                         </button>
                       )}
@@ -1077,7 +1103,7 @@ function App() {
               <div className="w-80 bg-white border-l border-gray-200">
                 <div className="p-6">
                   <h2 className="mb-6 text-sm font-semibold text-gray-900">SETTINGS</h2>
-                  
+
                   <div className="space-y-6">
                     {/* Background */}
                     <div>
@@ -1279,7 +1305,7 @@ function App() {
           </div>
         </div>
       </div>
-      
+
       <canvas ref={hiddenCanvasRef} style={{ display: 'none' }} />
     </div>
   );
