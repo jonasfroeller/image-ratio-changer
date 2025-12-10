@@ -777,6 +777,19 @@ function App() {
 
     setIsExporting(true);
 
+    const normalizedFormat = format === 'jpg' ? 'jpeg' : format;
+    const allowTransparency = normalizedFormat !== 'jpeg';
+    const outerColor = allowTransparency
+      ? outsideBackgroundColor
+      : ((isTransparentOutside || outsideBackgroundColor.toLowerCase() === 'transparent')
+        ? '#ffffff'
+        : outsideBackgroundColor);
+    const innerColor = allowTransparency
+      ? insideBackgroundColor
+      : ((isTransparent || insideBackgroundColor.toLowerCase() === 'transparent')
+        ? '#ffffff'
+        : insideBackgroundColor);
+
     const exportCanvas = document.createElement('canvas');
     const exportCtx = exportCanvas.getContext('2d');
 
@@ -786,9 +799,10 @@ function App() {
     const outerWidth = exportCanvas.width - margin * 2;
     const outerHeight = exportCanvas.height - margin * 2;
 
-    // Draw outer background if not transparent
-    if (!isTransparentOutside) {
-      exportCtx.fillStyle = outsideBackgroundColor;
+    const shouldFillOuter = !allowTransparency || !isTransparentOutside;
+
+    if (shouldFillOuter) {
+      exportCtx.fillStyle = outerColor;
       exportCtx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
     }
 
@@ -817,10 +831,12 @@ function App() {
     exportCtx.roundRect(innerX, innerY, innerWidth, innerHeight, innerBorderRadius);
     exportCtx.clip();
 
-    if (isTransparent) {
+    const shouldClearInner = allowTransparency && (isTransparent || innerColor.toLowerCase() === 'transparent');
+
+    if (shouldClearInner) {
       exportCtx.clearRect(innerX, innerY, innerWidth, innerHeight);
     } else {
-      exportCtx.fillStyle = insideBackgroundColor;
+      exportCtx.fillStyle = innerColor;
       exportCtx.fillRect(innerX, innerY, innerWidth, innerHeight);
     }
 
@@ -838,8 +854,13 @@ function App() {
     // Small delay for visual feedback
     setTimeout(() => {
       const link = document.createElement('a');
-      link.download = `image-${selectedRatio.ratio.replace(':', 'x')}.${format}`;
-      const mime = format === 'webp' ? 'image/webp' : 'image/png';
+      link.download = `image-${selectedRatio.ratio.replace(':', 'x')}.${normalizedFormat}`;
+      const mime = normalizedFormat === 'webp'
+        ? 'image/webp'
+        : normalizedFormat === 'jpeg'
+          ? 'image/jpeg'
+          : 'image/png';
+      const quality = (normalizedFormat === 'webp' || normalizedFormat === 'jpeg') ? 0.92 : undefined;
       exportCanvas.toBlob((blob) => {
         if (blob) {
           const url = URL.createObjectURL(blob);
@@ -847,11 +868,11 @@ function App() {
           link.click();
           URL.revokeObjectURL(url);
         } else {
-          link.href = exportCanvas.toDataURL(mime, format === 'webp' ? 0.9 : undefined);
+          link.href = exportCanvas.toDataURL(mime, quality);
           link.click();
         }
         setIsExporting(false);
-      }, mime, format === 'webp' ? 0.9 : undefined);
+      }, mime, quality);
     }, 300);
   };
 
@@ -952,6 +973,13 @@ function App() {
                   className="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded transition-colors hover:bg-gray-800 disabled:opacity-50"
                 >
                   {isExporting ? 'Exporting...' : 'Export PNG'}
+                </button>
+                <button
+                  onClick={() => exportImage('jpeg')}
+                  disabled={isExporting}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 rounded border border-gray-300 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Export JPEG
                 </button>
                 <button
                   onClick={() => exportImage('webp')}
