@@ -21,6 +21,11 @@ const PRESET_RATIOS = [
   { name: 'WhatsApp Status', ratio: '9:16', width: 1080, height: 1920, category: 'WhatsApp' },
   { name: 'Custom Portrait', ratio: '2:5', width: 800, height: 2000, category: 'Custom' },
   { name: 'Custom Landscape', ratio: '5:2', width: 2000, height: 800, category: 'Custom' },
+  { name: 'Chrome Web Store Icon', ratio: '1:1', width: 128, height: 128, category: 'Chrome Web Store' },
+  { name: 'Chrome Web Store Screenshot (Large)', ratio: '16:10', width: 1280, height: 800, category: 'Chrome Web Store' },
+  { name: 'Chrome Web Store Screenshot (Small)', ratio: '16:10', width: 640, height: 400, category: 'Chrome Web Store' },
+  { name: 'Chrome Web Store Small Promo Tile', ratio: '11:7', width: 440, height: 280, category: 'Chrome Web Store' },
+  { name: 'Chrome Web Store Marquee Promo Tile', ratio: '5:2', width: 1400, height: 560, category: 'Chrome Web Store' },
 ];
 
 function App() {

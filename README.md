@@ -9,6 +9,7 @@ A simple yet powerful tool to resize images for various social media platforms, 
 - **🖼️ Image Upload:** Supports various image formats, including GIF, with an easy-to-use drag-and-drop interface.
 - **🎞️ GIF Support:** Upload and preview individual frames of animated GIFs.
 - **📏 Social Media Presets:** A comprehensive list of presets for platforms like Instagram, YouTube, Facebook, TikTok, and more.
+- **🛍️ Chrome Web Store Presets:** Ready-made sizes for icons, screenshots, and promo tiles.
 - **🔄 Ratio Swap:** Easily swap aspect ratios (e.g., 16:9 to 9:16) with a single click.
 - **🎨 Customization:**
   - **Backgrounds:** Set custom colors for inner and outer backgrounds, with transparency options.
