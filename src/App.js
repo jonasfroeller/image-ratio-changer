@@ -53,6 +53,8 @@ function App() {
   const [currentFrame, setCurrentFrame] = useState(0);
   const [gifFrameCount, setGifFrameCount] = useState(0);
   const [margin, setMargin] = useState(0);
+  const [customWidth, setCustomWidth] = useState(String(PRESET_RATIOS[0].width));
+  const [customHeight, setCustomHeight] = useState(String(PRESET_RATIOS[0].height));
   const isScalingFromSlider = useRef(false);
 
   const canvasRef = useRef(null);
@@ -62,6 +64,90 @@ function App() {
   const gifBytesRef = useRef(null);
   const checkerTileRef = useRef(null);
   const imageObjectUrlRef = useRef(null);
+
+  const toPositiveInteger = (value, fallback = 1) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+    return Math.max(1, Math.round(parsed));
+  };
+
+  const getRatioLabel = (width, height) => {
+    const safeWidth = Math.max(1, Math.round(width));
+    const safeHeight = Math.max(1, Math.round(height));
+    let a = safeWidth;
+    let b = safeHeight;
+    while (b !== 0) {
+      const temp = b;
+      b = a % b;
+      a = temp;
+    }
+    const divisor = a || 1;
+    return `${safeWidth / divisor}:${safeHeight / divisor}`;
+  };
+
+  const drawResizeHandles = useCallback((ctx, x, y, width, height) => {
+    const handleSize = 8;
+    const handleColor = '#3b82f6';
+    const handleBorderColor = '#ffffff';
+
+    const handles = [
+      // Corners
+      { x: x - handleSize / 2, y: y - handleSize / 2, cursor: 'nw-resize', type: 'corner', direction: 'nw' },
+      { x: x + width - handleSize / 2, y: y - handleSize / 2, cursor: 'ne-resize', type: 'corner', direction: 'ne' },
+      { x: x - handleSize / 2, y: y + height - handleSize / 2, cursor: 'sw-resize', type: 'corner', direction: 'sw' },
+      { x: x + width - handleSize / 2, y: y + height - handleSize / 2, cursor: 'se-resize', type: 'corner', direction: 'se' },
+      // Sides
+      { x: x + width / 2 - handleSize / 2, y: y - handleSize / 2, cursor: 'n-resize', type: 'side', direction: 'n' },
+      { x: x + width - handleSize / 2, y: y + height / 2 - handleSize / 2, cursor: 'e-resize', type: 'side', direction: 'e' },
+      { x: x + width / 2 - handleSize / 2, y: y + height - handleSize / 2, cursor: 's-resize', type: 'side', direction: 's' },
+      { x: x - handleSize / 2, y: y + height / 2 - handleSize / 2, cursor: 'w-resize', type: 'side', direction: 'w' },
+    ];
+
+    handles.forEach(handle => {
+      ctx.fillStyle = handleBorderColor;
+      ctx.fillRect(handle.x - 1, handle.y - 1, handleSize + 2, handleSize + 2);
+
+      ctx.fillStyle = handleColor;
+      ctx.fillRect(handle.x, handle.y, handleSize, handleSize);
+    });
+
+    ctx.strokeStyle = handleColor;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([5, 5]);
+    ctx.strokeRect(x, y, width, height);
+    ctx.setLineDash([]);
+  }, []);
+
+  const drawCenterPoint = useCallback((ctx) => {
+    const handleSize = 10;
+    const handleColor = '#3b82f6';
+    const handleBorderColor = '#ffffff';
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const centerX = imagePosition.x + centerPoint.x;
+    const centerY = imagePosition.y + centerPoint.y;
+
+    ctx.fillStyle = handleBorderColor;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, handleSize / 2 + 1, 0, 2 * Math.PI);
+    ctx.fill();
+
+    ctx.fillStyle = handleColor;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, handleSize / 2, 0, 2 * Math.PI);
+    ctx.fill();
+
+    ctx.strokeStyle = handleColor;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(centerX - handleSize, centerY);
+    ctx.lineTo(centerX + handleSize, centerY);
+    ctx.moveTo(centerX, centerY - handleSize);
+    ctx.lineTo(centerX, centerY + handleSize);
+    ctx.stroke();
+  }, [centerPoint.x, centerPoint.y, imagePosition.x, imagePosition.y]);
 
   const drawCheckerboard = (ctx, width, height) => {
     const tileSize = 20;
@@ -200,75 +286,8 @@ function App() {
 
   }, [uploadedImage, selectedRatio, insideBackgroundColor, borderWidth, borderColor,
     borderRadius, fitMode, imageScale, originalImageData, isEditMode, imagePosition,
-    imageSize, centerPoint, showCenterPoint, isTransparent, isManuallyTransformed, margin, isTransparentOutside, outsideBackgroundColor]);
-
-  const drawResizeHandles = (ctx, x, y, width, height) => {
-    const handleSize = 8;
-    const handleColor = '#3b82f6';
-    const handleBorderColor = '#ffffff';
-
-    const handles = [
-      // Corners
-      { x: x - handleSize / 2, y: y - handleSize / 2, cursor: 'nw-resize', type: 'corner', direction: 'nw' },
-      { x: x + width - handleSize / 2, y: y - handleSize / 2, cursor: 'ne-resize', type: 'corner', direction: 'ne' },
-      { x: x - handleSize / 2, y: y + height - handleSize / 2, cursor: 'sw-resize', type: 'corner', direction: 'sw' },
-      { x: x + width - handleSize / 2, y: y + height - handleSize / 2, cursor: 'se-resize', type: 'corner', direction: 'se' },
-      // Sides
-      { x: x + width / 2 - handleSize / 2, y: y - handleSize / 2, cursor: 'n-resize', type: 'side', direction: 'n' },
-      { x: x + width - handleSize / 2, y: y + height / 2 - handleSize / 2, cursor: 'e-resize', type: 'side', direction: 'e' },
-      { x: x + width / 2 - handleSize / 2, y: y + height - handleSize / 2, cursor: 's-resize', type: 'side', direction: 's' },
-      { x: x - handleSize / 2, y: y + height / 2 - handleSize / 2, cursor: 'w-resize', type: 'side', direction: 'w' },
-    ];
-
-    handles.forEach(handle => {
-      ctx.fillStyle = handleBorderColor;
-      ctx.fillRect(handle.x - 1, handle.y - 1, handleSize + 2, handleSize + 2);
-
-      ctx.fillStyle = handleColor;
-      ctx.fillRect(handle.x, handle.y, handleSize, handleSize);
-    });
-
-    // Draw selection border
-    ctx.strokeStyle = handleColor;
-    ctx.lineWidth = 2;
-    ctx.setLineDash([5, 5]);
-    ctx.strokeRect(x, y, width, height);
-    ctx.setLineDash([]);
-  };
-
-  const drawCenterPoint = (ctx) => {
-    const handleSize = 10;
-    const handleColor = '#3b82f6';
-    const handleBorderColor = '#ffffff';
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    // Center point is relative to image, so calculate canvas coordinates
-    const centerX = imagePosition.x + centerPoint.x;
-    const centerY = imagePosition.y + centerPoint.y;
-
-    // Draw center point
-    ctx.fillStyle = handleBorderColor;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, handleSize / 2 + 1, 0, 2 * Math.PI);
-    ctx.fill();
-
-    ctx.fillStyle = handleColor;
-    ctx.beginPath();
-    ctx.arc(centerX, centerY, handleSize / 2, 0, 2 * Math.PI);
-    ctx.fill();
-
-    // Draw crosshairs
-    ctx.strokeStyle = handleColor;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(centerX - handleSize, centerY);
-    ctx.lineTo(centerX + handleSize, centerY);
-    ctx.moveTo(centerX, centerY - handleSize);
-    ctx.lineTo(centerX, centerY + handleSize);
-    ctx.stroke();
-  };
+    imageSize, showCenterPoint, isTransparent, isManuallyTransformed, margin,
+    isTransparentOutside, outsideBackgroundColor, drawResizeHandles, drawCenterPoint]);
 
   useEffect(() => {
     drawImageOnCanvas();
@@ -288,6 +307,11 @@ function App() {
       gifBytesRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    setCustomWidth(String(selectedRatio.width));
+    setCustomHeight(String(selectedRatio.height));
+  }, [selectedRatio.width, selectedRatio.height]);
 
   const handleFrameChange = (frameIndex) => {
     if (!gifReaderRef.current) return;
@@ -601,6 +625,8 @@ function App() {
                 newHeight = Math.max(20, dragState.startSize.height + deltaY);
               }
               break;
+            default:
+              break;
           }
           const originX = dragState.startPosition.x + dragState.startCenterPoint.x;
           const originY = dragState.startPosition.y + dragState.startCenterPoint.y;
@@ -705,6 +731,24 @@ function App() {
     }
   };
 
+  const applyCustomRatio = () => {
+    const width = toPositiveInteger(customWidth, selectedRatio.width);
+    const height = toPositiveInteger(customHeight, selectedRatio.height);
+    const ratioLabel = getRatioLabel(width, height);
+
+    setSelectedRatio({
+      name: 'Custom',
+      ratio: ratioLabel,
+      width,
+      height,
+      category: 'Custom',
+    });
+    setCustomWidth(String(width));
+    setCustomHeight(String(height));
+    setIsEditMode(false);
+    setIsManuallyTransformed(false);
+  };
+
   const swapRatio = () => {
     const [w, h] = selectedRatio.ratio.split(':').map(Number);
     const isAlreadySwapped = selectedRatio.name.includes('(Swapped)');
@@ -807,14 +851,16 @@ function App() {
   };
 
   const categories = [...new Set(PRESET_RATIOS.map(preset => preset.category))];
+  const normalizedCustomWidth = toPositiveInteger(customWidth, selectedRatio.width);
+  const normalizedCustomHeight = toPositiveInteger(customHeight, selectedRatio.height);
+  const customRatioLabel = getRatioLabel(normalizedCustomWidth, normalizedCustomHeight);
+  const canApplyCustomRatio = Number(customWidth) > 0 && Number(customHeight) > 0;
+  const isCustomRatioSelected = selectedRatio.name === 'Custom';
 
   useEffect(() => {
     if (!isEditMode || !uploadedImage || !isScalingFromSlider.current) return;
 
     const scaleFactor = imageScale / 100;
-
-    const baseWidth = imageSize.width / (imageScale / 100);
-    const baseHeight = imageSize.height / (imageScale / 100);
 
     const newWidth = baseImageSize.width * scaleFactor;
     const newHeight = baseImageSize.height * scaleFactor;
@@ -838,7 +884,19 @@ function App() {
 
     isScalingFromSlider.current = false;
 
-  }, [imageScale]);
+  }, [
+    imageScale,
+    isEditMode,
+    uploadedImage,
+    baseImageSize.width,
+    baseImageSize.height,
+    imagePosition.x,
+    imagePosition.y,
+    imageSize.width,
+    imageSize.height,
+    centerPoint.x,
+    centerPoint.y,
+  ]);
 
   useEffect(() => {
     if (!isEditMode || !uploadedImage) {
@@ -854,8 +912,15 @@ function App() {
         height: imageSize.height / scaleFactor
       });
     }
-
-  }, [isEditMode, uploadedImage, imageSize, imageScale, baseImageSize.width]);
+  }, [
+    isEditMode,
+    uploadedImage,
+    imageSize.width,
+    imageSize.height,
+    imageScale,
+    baseImageSize.width,
+    baseImageSize.height,
+  ]);
 
   return (
     <div className="flex flex-col flex-grow bg-gray-50">
@@ -1007,6 +1072,52 @@ function App() {
                     >
                       ↔ Swap
                     </button>
+                  </div>
+
+                  <div className="p-4 mb-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="flex justify-between items-start mb-3">
+                      <div>
+                        <p className="text-xs font-semibold text-gray-900">Custom ratio</p>
+                        <p className="text-[11px] text-gray-500">Set exact canvas dimensions</p>
+                      </div>
+                      <span className="px-2 py-1 text-[11px] font-medium text-gray-700 bg-white border border-gray-200 rounded">
+                        {customRatioLabel}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="block mb-1 text-[11px] font-semibold text-gray-700 tracking-wide uppercase">Width (px)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={customWidth}
+                          onChange={(e) => setCustomWidth(e.target.value)}
+                          className="px-3 py-2 w-full text-sm rounded-md border border-gray-300 focus:ring-1 focus:ring-gray-400 focus:border-gray-400"
+                        />
+                      </div>
+                      <div>
+                        <label className="block mb-1 text-[11px] font-semibold text-gray-700 tracking-wide uppercase">Height (px)</label>
+                        <input
+                          type="number"
+                          min="1"
+                          value={customHeight}
+                          onChange={(e) => setCustomHeight(e.target.value)}
+                          className="px-3 py-2 w-full text-sm rounded-md border border-gray-300 focus:ring-1 focus:ring-gray-400 focus:border-gray-400"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <div className="text-xs text-gray-600">
+                        {normalizedCustomWidth} × {normalizedCustomHeight} px {isCustomRatioSelected ? '• Active' : ''}
+                      </div>
+                      <button
+                        onClick={applyCustomRatio}
+                        disabled={!canApplyCustomRatio}
+                        className="px-3 py-2 text-xs font-semibold text-white bg-gray-900 rounded disabled:opacity-50 hover:bg-gray-800"
+                      >
+                        Apply
+                      </button>
+                    </div>
                   </div>
 
                   <div className="overflow-y-auto pr-2 space-y-4 max-h-96">
